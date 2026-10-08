@@ -67,11 +67,9 @@ Return ONLY JSON: {"meta":"<=155 chars","h1":"","intro":"","sections":[{"h":"","
 const buy = p => `<a class="buy" href="${esc(p.link)}" target="_blank" rel="sponsored nofollow noopener">Buy on AliExpress</a>`;
 const card = p => `<div class="card"><a href="/p/${p.slug}/"><img src="${esc(p.img)}" alt="${esc(p.title)}" loading="lazy" width="300" height="300">
 <h3>${esc(p.title)}</h3></a><div class="row"><b>$${esc(p.price)}</b>${p.was && p.was !== p.price ? `<s>$${esc(p.was)}</s>` : ''}</div>${buy(p)}</div>`;
-const page = (title, desc, path, body, ld = '') => `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+const page = (title, desc, path, body, ld = '') => `<!doctype html><html lang="en"><head><meta name="google-site-verification" content="_4VkmabLnuUpaZsR_fbYgax5Vya259ewVL1N8kZ31hs" /><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><link rel="canonical" href="${cfg.domain}${path}">
-<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><link rel="stylesheet" href="/style.css">${ld} />
-<meta name="google-site-verification" content="_4VkmabLnuUpaZsR_fbYgax5Vya259ewVL1N8kZ31hs" />
-</head>
+<meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><link rel="stylesheet" href="/style.css">${ld}</head>
 <body><header><a href="/" class="logo">${esc(cfg.siteName)}</a></header><main>${body}</main>
 <footer><p>Disclosure: we earn a commission from qualifying purchases via AliExpress affiliate links, at no extra cost to you. Prices and availability can change.</p><p>&copy; ${new Date().getFullYear()} ${esc(cfg.siteName)}</p></footer></body></html>`;
 
