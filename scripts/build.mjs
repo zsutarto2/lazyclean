@@ -13,7 +13,9 @@ async function ali(method, extra) {
   p.sign = createHmac('sha256', E.ALI_APP_SECRET).update(base).digest('hex').toUpperCase();
   const r = await (await fetch(API + '?' + new URLSearchParams(p))).json();
   const key = Object.keys(r).find(k => k.endsWith('_response'));
-  return r[key]?.resp_result?.result?.products?.product || [];
+  const prods = r[key]?.resp_result?.result?.products?.product;
+  if (!prods) console.warn(`[AliExpress ${method}] empty/error response:`, JSON.stringify(r).slice(0, 400));
+  return prods || [];
 }
 const norm = (x, hot) => ({
   id: String(x.product_id), title: x.product_title.slice(0, 90), img: x.product_main_image_url,
@@ -90,7 +92,7 @@ for (const [i, kw] of cfg.keywords.entries()) {
     seen.set(x.product_id, { ...norm(x, true), ...(seen.get(x.product_id) && { hot: true }) });
 }
 const all = [...seen.values()].filter(p => p.link && p.img).slice(0, cfg.maxProducts);
-if (!all.length) throw new Error('No products returned. Check ALI_* env vars and API permissions.');
+if (!all.length) throw new Error('No products returned. See the [AliExpress ...] log lines above for the API error.');
 const hot = all.filter(p => p.hot).sort((a, b) => b.sold - a.sold).slice(0, 6);
 
 await rm('dist', { recursive: true, force: true });
