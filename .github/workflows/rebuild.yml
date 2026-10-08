@@ -1,0 +1,9 @@
+name: Daily rebuild
+on:
+  schedule: [{ cron: '0 9 * * *' }]
+  workflow_dispatch:
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -X POST "${{ secrets.DEPLOY_HOOK }}"
