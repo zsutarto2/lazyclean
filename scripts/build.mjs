@@ -31,6 +31,23 @@ async function sb(method, path, body, h = {}) {
   return method === 'GET' ? r.json() : null;
 }
 
+let cand;
+async function geminiModels() {
+  if (cand) return cand;
+  if (E.GEMINI_MODEL) return (cand = [E.GEMINI_MODEL]); // override manual
+  const fallback = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
+  try {
+    const r = await (await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': E.GEMINI_API_KEY } })).json();
+    const v = n => +(n.match(/gemini-(\d+(?:\.\d+)?)/)?.[1] || 0);
+    const names = (r.models || []).filter(m => m.supportedGenerationMethods?.includes('generateContent')).map(m => m.name.replace('models/', ''))
+      .filter(n => /flash/.test(n) && !/lite|tts|image|live|audio|computer|embed|thinking|exp/.test(n));
+    names.sort((a, b) => (/preview/.test(a) - /preview/.test(b)) || v(b) - v(a));
+    cand = names.length ? names.slice(0, 3) : fallback;
+  } catch { cand = fallback; }
+  console.log('Gemini models to try:', cand.join(', '));
+  return cand;
+}
+
 // ---------- SEO article (Claude if key set, witty template otherwise) ----------
 async function article(p) {
   const hit = await sb('GET', `articles?id=eq.${p.id}&select=data`);
@@ -50,11 +67,12 @@ Return ONLY JSON: {"meta":"<=155 chars","h1":"","intro":"","sections":[{"h":"","
   let ok = false;
   if (E.GEMINI_API_KEY) for (let t = 0; t < 3 && !ok; t++) try {
     await new Promise(r => setTimeout(r, 7000 * (t + 1))); // jeda agar aman dari rate limit tier gratis
-    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+    const list = await geminiModels(), m = list[t % list.length];
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
       method: 'POST', headers: { 'x-goog-api-key': E.GEMINI_API_KEY, 'content-type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4000, thinkingConfig: { thinkingBudget: 0 } } }) });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+        generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4000 } }) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} (${m}): ${(await res.text()).slice(0, 200)}`);
     const j = JSON.parse((await res.json()).candidates[0].content.parts[0].text.replace(/```json|```/g, '').trim());
     if (!j.h1 || !j.sections?.length || !j.faq?.length) throw new Error('bad JSON shape');
     a = j; ok = true;
@@ -84,16 +102,21 @@ main{max-width:1100px;margin:auto;padding:24px 5%}h1{line-height:1.2}.grid{displ
 .prod img{width:100%;border-radius:12px}article h2{margin-top:32px}footer{padding:24px 5%;font-size:13px;color:#666;text-align:center}`;
 
 // ---------- Build ----------
-const seen = new Map();
+const seen = new Map(); let hotOff = false;
 for (const [i, kw] of cfg.keywords.entries()) {
   const q = { keywords: kw, page_size: cfg.perKeyword, sort: 'LAST_VOLUME_DESC', page_no: 1 };
   for (const x of await ali('aliexpress.affiliate.product.query', q)) if (!seen.has(x.product_id)) seen.set(x.product_id, norm(x, false));
-  if (i < 3) for (const x of await ali('aliexpress.affiliate.hotproduct.query', { keywords: kw, page_size: 4 }))
-    seen.set(x.product_id, { ...norm(x, true), ...(seen.get(x.product_id) && { hot: true }) });
+  if (i < 3 && !hotOff) {
+    const h = await ali('aliexpress.affiliate.hotproduct.query', { keywords: kw, page_size: 4 });
+    if (!h.length) hotOff = true; // izin API hot belum ada: pakai fallback penjualan terbanyak
+    for (const x of h) seen.set(x.product_id, norm(x, true));
+  }
 }
 const all = [...seen.values()].filter(p => p.link && p.img).slice(0, cfg.maxProducts);
 if (!all.length) throw new Error('No products returned. See the [AliExpress ...] log lines above for the API error.');
-const hot = all.filter(p => p.hot).sort((a, b) => b.sold - a.sold).slice(0, 6);
+const byVol = [...all].sort((a, b) => b.sold - a.sold);
+const hot = [...byVol.filter(p => p.hot), ...byVol.filter(p => !p.hot)].slice(0, 6);
+hot.forEach(p => (p.hot = true));
 
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist/p', { recursive: true });
